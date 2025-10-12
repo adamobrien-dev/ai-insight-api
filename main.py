@@ -1,20 +1,40 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from openai import OpenAI
 from dotenv import load_dotenv
 from typing import Literal, Optional, List, Dict
 import time
 
+
+# Load environment variables and initialize OpenAI client
 load_dotenv()
 client = OpenAI()
 
+# Initialize FastAPI app
 app = FastAPI(title="AI Insight API")
 
+# CORS setup — allow frontend to call API
+origins = [
+    "http://localhost:3000",  # Local React/Next.js frontend
+    "https://adamobrien.dev",  # Production domain
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,       # ["*"] for all (not recommended for prod)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Models ---
 class PromptRequest(BaseModel):
     prompt: str
     model: Literal["gpt-4o-mini", "gpt-4-turbo"] = "gpt-4o-mini"
     temperature: float = Field(0.3, ge=0, le=1)
 
+# --- Routes ---
 @app.get("/")
 def root():
     return {"service": "AI Insight API", "docs": "/docs"}
