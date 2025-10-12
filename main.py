@@ -11,6 +11,15 @@ app = FastAPI()
 class PromptRequest(BaseModel):
     prompt: str
 
+
+@app.get("/")
+def root():
+    return {"service": "AI Insight API", "docs": "/docs"}
+
+@app.get("/health")
+def health():
+    return {"ok": True}
+
 @app.post("/analyze")
 def analyze(request: PromptRequest):
     response = client.chat.completions.create(
