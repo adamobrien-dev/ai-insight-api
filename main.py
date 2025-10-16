@@ -5,7 +5,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from typing import Literal, Optional, List, Dict
 import time
-
+from models import ImageInsightResponse, ImageAnalysisRequest
 
 # Load environment variables and initialize OpenAI client
 load_dotenv()
@@ -62,5 +62,40 @@ def analyze(req: PromptRequest):
             "latency": f"{latency}s",
             "model": req.model
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze-image", response_model=ImageInsightResponse)
+async def analyze_image(req: ImageAnalysisRequest):
+    start = time.time()
+    try:
+        result = client.chat.completions.create(
+            model=req.model,
+            messages=[
+                {"role": "system", "content": "You are an image analysis assistant."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": req.prompt},
+                        {"type": "image_url", "image_url": {"url": req.image_url}}
+                    ]
+                }
+            ]
+        )
+
+        # Extract the model's text response
+        message = result.choices[0].message.content
+        elapsed = round(time.time() - start, 2)
+
+        # Return it in your standardized response format
+        return ImageInsightResponse(
+            summary=message,
+            entities=[],
+            text_in_image=None,
+            model_used=req.model,
+            tokens_used=None
+        )
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
