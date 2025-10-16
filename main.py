@@ -5,7 +5,7 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from typing import Literal, Optional, List, Dict
 import time
-from models import ImageInsightResponse, ImageAnalysisRequest
+from models import ImageInsightResponse, ImageUrlPayload
 
 # Load environment variables and initialize OpenAI client
 load_dotenv()
@@ -67,7 +67,7 @@ def analyze(req: PromptRequest):
 
 
 @app.post("/analyze-image", response_model=ImageInsightResponse)
-async def analyze_image(req: ImageAnalysisRequest):
+async def analyze_image(req: ImageUrlPayload):
     start = time.time()
     try:
         result = client.chat.completions.create(
@@ -78,15 +78,19 @@ async def analyze_image(req: ImageAnalysisRequest):
                     "role": "user",
                     "content": [
                         {"type": "text", "text": req.prompt},
-                        {"type": "image_url", "image_url": {"url": req.image_url}}
+                        {"type": "image_url", "image_url": {"url": str(req.image_url)}}
                     ]
                 }
-            ]
+            ],
+            temperature=req.temperature
         )
 
         # Extract the model's text response
         message = result.choices[0].message.content
         elapsed = round(time.time() - start, 2)
+        
+        # Get token usage from the response
+        tokens_used = result.usage.total_tokens if result.usage else None
 
         # Return it in your standardized response format
         return ImageInsightResponse(
@@ -94,7 +98,7 @@ async def analyze_image(req: ImageAnalysisRequest):
             entities=[],
             text_in_image=None,
             model_used=req.model,
-            tokens_used=None
+            tokens_used=tokens_used
         )
 
     except Exception as e:
