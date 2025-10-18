@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from openai import OpenAI
 from dotenv import load_dotenv
 from typing import Literal, Optional, List, Dict
 import time
+import base64
 from models import ImageInsightResponse, ImageUrlPayload
 
 # Load environment variables and initialize OpenAI client
@@ -103,3 +104,83 @@ async def analyze_image(req: ImageUrlPayload):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze-file", response_model=ImageInsightResponse, status_code=status.HTTP_200_OK)
+async def analyze_file(
+    file: UploadFile = File(..., description="jpg/png/webp image"),
+    prompt: str = "Describe this image",
+    model: Literal["gpt-4o", "gpt-4o-mini"] = "gpt-4o-mini",
+    temperature: float = 0.2,
+):
+    start = time.time()
+
+    # 1) Basic validation (size/type)
+    content = await file.read()
+
+    MAX_BYTES = 5 * 1024 * 1024  # 5MB limit (tweak as needed)
+    if len(content) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large (max 5MB).")
+
+    # Detect image type from byte signatures (magic bytes)
+    def detect_image_type(data: bytes) -> Optional[str]:
+        if data.startswith(b'\xff\xd8\xff'):
+            return "jpeg"
+        elif data.startswith(b'\x89PNG\r\n\x1a\n'):
+            return "png"
+        elif data.startswith(b'RIFF') and data[8:12] == b'WEBP':
+            return "webp"
+        return None
+    
+    detected = detect_image_type(content)
+    ct = (file.content_type or "").lower()
+
+    # Acceptable types
+    ok_types = {"image/jpeg": "jpeg", "image/png": "png", "image/webp": "webp"}
+    
+    # Use detected type or fall back to content-type header
+    if detected:
+        ext = detected
+    else:
+        ext = ok_types.get(ct)
+
+    if ext not in ("jpeg", "png", "webp"):
+        raise HTTPException(status_code=415, detail="Unsupported image type. Use jpg, png, or webp.")
+
+    # 2) Convert to base64 data URL that OpenAI can read
+    b64 = base64.b64encode(content).decode("utf-8")
+    data_url = f"data:image/{ext};base64,{b64}"
+
+    try:
+        # 3) Call the vision model
+        result = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an image analysis assistant."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+            temperature=temperature,
+        )
+
+        message = result.choices[0].message.content
+        tokens_used = result.usage.total_tokens if result.usage else None
+
+        return ImageInsightResponse(
+            summary=message,
+            entities=[],
+            text_in_image=None,
+            model_used=model,
+            tokens_used=tokens_used,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        elapsed = round(time.time() - start, 2)
+        # (optional) print or log elapsed
