@@ -105,3 +105,40 @@ class ImageAnalysisRequest(BaseModel):
     image_url: str
     prompt: Optional[str] = "Describe this image"
     model: Optional[str] = "gpt-4o-mini"
+
+
+# ===== Batch Processing Models =====
+
+class AnalyzeItem(BaseModel):
+    """
+    Single item for batch analysis - can be text or image.
+    """
+    prompt: str = Field(..., min_length=1, description="Prompt to analyze")
+    image_url: Optional[AnyHttpUrl] = Field(
+        None,
+        description="Optional image URL. If provided, performs image analysis."
+    )
+    model: Optional[Literal["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]] = None
+    temperature: Optional[float] = Field(None, ge=0.0, le=1.0)
+
+
+class AnalyzeBatchRequest(BaseModel):
+    """
+    Request model for batch analysis endpoint.
+    """
+    items: List[AnalyzeItem] = Field(
+        ...,
+        min_length=1,
+        max_length=10,  # Limit batch size for safety
+        description="List of items to analyze (max 10)"
+    )
+
+
+class AnalyzeBatchResponse(BaseModel):
+    """
+    Response model for batch analysis endpoint.
+    """
+    results: List[dict] = Field(
+        ...,
+        description="List of results corresponding to input items"
+    )

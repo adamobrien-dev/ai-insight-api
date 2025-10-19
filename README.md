@@ -11,17 +11,29 @@ FastAPI-powered AI analysis API that transforms natural language prompts into st
 ---
 
 ## 🚀 Features
+
+### Core Endpoints
 - `/analyze` endpoint for text → insight transformation  
 - `/analyze-image` endpoint for image analysis via URL
 - `/analyze-file` endpoint for direct image upload (jpg/png/webp)
+- `/analyze-batch` endpoint for processing multiple prompts/images in one request
+
+### Security & Reliability
+- Optional API key authentication for write endpoints
+- Request ID tracking and structured logging
+- OpenAI client with configurable timeouts (30s) and retries (2x)
+- Image type detection via magic bytes (secure validation)
+- 5MB file size cap with proper error handling
+- Friendly validation error messages
+
+### Developer Experience
 - Real-time responses with request validation via Pydantic  
 - Auto-generated OpenAPI docs (`/docs` and `/redoc`)  
-- Lightweight and deployable via Docker  
+- Token usage and latency tracking for all API calls
 - Health check route for monitoring uptime
 - Multiple model support (GPT-4o-mini, GPT-4o, GPT-4-turbo)
 - Configurable temperature for response creativity
-- Image type detection via magic bytes (secure validation)
-- Token usage tracking for all OpenAI API calls
+- CORS configured for localhost and production domains
 
 ---
 

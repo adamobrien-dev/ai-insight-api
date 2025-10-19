@@ -1,19 +1,36 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.requests import Request
 from pydantic import BaseModel, Field
 from openai import OpenAI
 from dotenv import load_dotenv
 from typing import Literal, Optional, List, Dict
 import time
 import base64
+import os
+import uuid
+import logging
 from models import ImageInsightResponse, ImageUrlPayload
 
-# Load environment variables and initialize OpenAI client
+# Load environment variables
 load_dotenv()
-client = OpenAI()
+
+# Validate required environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise RuntimeError("OPENAI_API_KEY not set in environment")
+
+# Initialize OpenAI client with timeouts and retries
+client = OpenAI(api_key=OPENAI_API_KEY).with_options(timeout=30.0, max_retries=2)
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("AI Insight API")
 
 # Initialize FastAPI app
-app = FastAPI(title="AI Insight API")
+app = FastAPI(title="AI Insight API", version="0.1.0")
 
 # CORS setup — allow frontend to call API
 origins = [
@@ -23,11 +40,38 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,       # ["*"] for all (not recommended for prod)
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Logging middleware - track all requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    req_id = str(uuid.uuid4())
+    start = time.time()
+    response = None
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        logger.info(
+            "rid=%s method=%s path=%s status=%s dur=%.3fs",
+            req_id,
+            request.method,
+            request.url.path,
+            getattr(response, "status_code", "NA"),
+            time.time() - start,
+        )
+
+# Friendly validation errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"error": "ValidationError", "details": exc.errors()},
+    )
 
 # --- Models ---
 class PromptRequest(BaseModel):
@@ -46,7 +90,7 @@ def health():
 
 @app.get("/models")
 def list_models():
-    return {"available_models": ["gpt-4o-mini", "gpt-4-turbo"]}
+    return {"available_models": ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"]}
 
 @app.post("/analyze")
 def analyze(req: PromptRequest):
@@ -58,12 +102,15 @@ def analyze(req: PromptRequest):
             temperature=req.temperature
         )
         latency = round(time.time() - start, 2)
+        tokens = response.usage.total_tokens if response.usage else None
         return {
             "response": response.choices[0].message.content,
             "latency": f"{latency}s",
-            "model": req.model
+            "model": req.model,
+            "tokens_used": tokens
         }
     except Exception as e:
+        logger.error(f"Analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -103,6 +150,7 @@ async def analyze_image(req: ImageUrlPayload):
         )
 
     except Exception as e:
+        logger.error(f"Image URL analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -180,7 +228,5 @@ async def analyze_file(
         )
 
     except Exception as e:
+        logger.error(f"File analysis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        elapsed = round(time.time() - start, 2)
-        # (optional) print or log elapsed
