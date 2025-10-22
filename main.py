@@ -36,6 +36,7 @@ app = FastAPI(title="AI Insight API", version="0.1.0")
 origins = [
     "http://localhost:3000",  # Local React/Next.js frontend
     "https://adamobrien.dev",  # Production domain
+    "https://ai-insight-api.adamobrien.dev",  # Vercel deployment
 ]
 
 app.add_middleware(

@@ -80,6 +80,12 @@ uvicorn main:app --reload
 
 The API will be available at `http://localhost:8000`
 
+## 🌐 Live Demo
+
+Try the API at: **https://ai-insight-api.adamobrien.dev/docs**
+
+Interactive documentation and testing interface available at the live URL.
+
 ---
 
 ## 📚 API Endpoints
