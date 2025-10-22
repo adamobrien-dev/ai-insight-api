@@ -385,24 +385,25 @@ Once the server is running, visit:
 ## 🚢 Deployment
 
 ### Docker Deployment
-Create a `Dockerfile`:
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-Build and run:
 ```bash
+# Build the image
 docker build -t ai-insight-api .
+
+# Run with environment variables
+docker run -d -p 8000:8000 \
+  -e OPENAI_API_KEY=your_openai_api_key_here \
+  ai-insight-api
+
+# Or with .env file
 docker run -d -p 8000:8000 --env-file .env ai-insight-api
 ```
 
-Access the API at `http://<your-server-ip>:8000/docs`
+Access the API at `http://localhost:8000/docs`
+
+### Vercel Deployment (Serverless)
+1. Connect your GitHub repo to Vercel
+2. Set environment variables in Vercel dashboard
+3. Deploy automatically on git push
 
 ### AWS EC2 / Cloud Deployment
 To deploy on AWS EC2 or similar cloud platforms:
